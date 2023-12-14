@@ -127,7 +127,8 @@ class STAEformer(nn.Module):
         num_layers=3,
         dropout=0.1,
         use_mixed_proj=True,
-        edge=None
+        edge=None,
+        edge_index=None,
     ):
         super().__init__()
 
@@ -155,7 +156,8 @@ class STAEformer(nn.Module):
         if edge is None:
             self.edge = torch.eye(num_nodes)
         else:
-            self.edge = torch.Tensor(edge)
+            self.edge = torch.Tensor(edge.T)
+            self.edge_index = torch.LongTensor(edge_index.T)
         self.input_proj = nn.Linear(input_dim, input_embedding_dim)
         if tod_embedding_dim > 0:
             self.tod_embedding = nn.Embedding(steps_per_day, tod_embedding_dim)
@@ -173,15 +175,15 @@ class STAEformer(nn.Module):
 
         if use_mixed_proj:
             self.output_proj = nn.Linear(
-                in_steps * self.model_dim, out_steps * output_dim
+                in_steps * self.model_dim * 2, out_steps * output_dim
             )
         else:
             self.temporal_proj = nn.Linear(in_steps, out_steps)
             self.output_proj = nn.Linear(self.model_dim, self.output_dim)
 
-        self.attn_layers_t = nn.ModuleList(
+        self.attn_layers_s2 = nn.ModuleList(
             [
-                SelfAttentionLayer(self.model_dim, feed_forward_dim, num_heads, dropout)
+                SelfAttentionLayer(self.model_dim*2, feed_forward_dim, num_heads, dropout)
                 for _ in range(num_layers)
             ]
         )
@@ -227,22 +229,23 @@ class STAEformer(nn.Module):
             features.append(adp_emb)
         x = torch.cat(features, dim=-1)  # (batch_size, in_steps, num_nodes, model_dim)
         edge = self.edge.to(x.device)
-        x = torch.einsum("mn,btnd->btmd",edge,x)
-        for attn in self.attn_layers_t:
-            x = attn(x, dim=1)
+        edge_index = self.edge_index.to(x.device)
         for attn in self.attn_layers_s:
             x = attn(x, dim=2)
+        x = torch.concat([x[:,:,edge_index[0]],x[:,:,edge_index[1]]],dim=-1)
+        for attn in self.attn_layers_s2:
+            x = attn(x, dim=2)
         # (batch_size, in_steps, num_nodes, model_dim)
-        x = torch.einsum("btmd,mn->btnd",x,edge)
         if self.use_mixed_proj:
             out = x.transpose(1, 2)  # (batch_size, num_nodes, in_steps, model_dim)
             out = out.reshape(
-                batch_size, self.num_nodes, self.in_steps * self.model_dim
+                batch_size, -1, self.in_steps * self.model_dim * 2
             )
             out = self.output_proj(out).view(
-                batch_size, self.num_nodes, self.out_steps, self.output_dim
+                batch_size, -1, self.out_steps, self.output_dim
             )
             out = out.transpose(1, 2)  # (batch_size, out_steps, num_nodes, output_dim)
+            out = torch.einsum("nm,btmd->btnd",edge,out)
         else:
             out = x.transpose(1, 3)  # (batch_size, model_dim, num_nodes, in_steps)
             out = self.temporal_proj(

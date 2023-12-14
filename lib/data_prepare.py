@@ -96,6 +96,7 @@ def get_adj_dis_matrix(dataset, adj_file, num_of_vertices, direction=False, id_f
     A = np.zeros((int(num_of_vertices), int(num_of_vertices)), dtype=np.float32)
     distaneA = np.zeros((int(num_of_vertices), int(num_of_vertices)), dtype=np.float32)
     edges = []
+    edge_index = []
     # if node id in distance_df_file doesn't start from zero,
     # it needs to be remap via id_filename which contains the corresponding id with sorted index.
     if id_filename:
@@ -130,10 +131,11 @@ def get_adj_dis_matrix(dataset, adj_file, num_of_vertices, direction=False, id_f
                 edge = np.zeros(num_of_vertices)
                 edge[i],edge[j] = 1,1
                 edges.append([edge])
+                edge_index.append([i,j])
                 A[i, j] = 1
                 distaneA[i, j] = max_dict[dataset] / distance
                 if not direction:
                     A[j, i] = 1
                     distaneA[j, i] = max_dict[dataset] / distance
         edges = np.concatenate(edges,axis=0)
-        return A, distaneA,edges
+        return A, distaneA,edges,np.array(edge_index)

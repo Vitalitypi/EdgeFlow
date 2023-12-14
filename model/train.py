@@ -235,7 +235,8 @@ if __name__ == "__main__":
         cfg = yaml.safe_load(f)
     cfg = cfg[dataset]
     adj_path = '../data/{}/{}.csv'.format(dataset,dataset)
-    adj,dis,edge = get_adj_dis_matrix(dataset,adj_path,cfg['num_nodes'])
+    adj,dis,edge,edge_index = get_adj_dis_matrix(dataset,adj_path,cfg['num_nodes'])
+    cfg["model_args"]['edge_index'] = edge_index
     cfg["model_args"]['edge'] = edge
     # -------------------------------- load model -------------------------------- #
 
