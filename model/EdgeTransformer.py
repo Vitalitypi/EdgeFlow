@@ -1,3 +1,5 @@
+
+
 import torch.nn as nn
 import torch
 from torchinfo import summary
@@ -127,7 +129,6 @@ class STAEformer(nn.Module):
         num_layers=3,
         dropout=0.1,
         use_mixed_proj=True,
-        edge=None
     ):
         super().__init__()
 
@@ -152,10 +153,7 @@ class STAEformer(nn.Module):
         self.num_heads = num_heads
         self.num_layers = num_layers
         self.use_mixed_proj = use_mixed_proj
-        if edge is None:
-            self.edge = torch.eye(num_nodes)
-        else:
-            self.edge = torch.Tensor(edge)
+
         self.input_proj = nn.Linear(input_dim, input_embedding_dim)
         if tod_embedding_dim > 0:
             self.tod_embedding = nn.Embedding(steps_per_day, tod_embedding_dim)
@@ -226,14 +224,13 @@ class STAEformer(nn.Module):
             )
             features.append(adp_emb)
         x = torch.cat(features, dim=-1)  # (batch_size, in_steps, num_nodes, model_dim)
-        edge = self.edge.to(x.device)
-        x = torch.einsum("mn,btnd->btmd",edge,x)
+
         for attn in self.attn_layers_t:
             x = attn(x, dim=1)
         for attn in self.attn_layers_s:
             x = attn(x, dim=2)
         # (batch_size, in_steps, num_nodes, model_dim)
-        x = torch.einsum("btmd,mn->btnd",x,edge)
+
         if self.use_mixed_proj:
             out = x.transpose(1, 2)  # (batch_size, num_nodes, in_steps, model_dim)
             out = out.reshape(
@@ -255,6 +252,40 @@ class STAEformer(nn.Module):
         return out
 
 
+
+class Encoder(nn.Module):
+    def __init__(self,
+                num_nodes,
+                in_steps=12,
+                out_steps=12,
+                steps_per_day=288,
+                input_dim=3,
+                output_dim=1,
+                input_embedding_dim=24,
+                tod_embedding_dim=24,
+                dow_embedding_dim=24,
+                spatial_embedding_dim=0,
+                adaptive_embedding_dim=80,
+                feed_forward_dim=256,
+                num_heads=4,
+                num_layers=3,
+                dropout=0.1,
+                use_mixed_proj=True,
+        ):
+        super(Encoder, self).__init__()
+        self.input_proj = nn.Linear(input_dim, input_embedding_dim)
+
+    def forward(self,x):
+        pass
+
+
+
+class EdgeTransformer(nn.Module):
+    def __init__(self):
+        super(EdgeTransformer, self).__init__()
+
+    def forward(self,x):
+        pass
 if __name__ == "__main__":
     model = STAEformer(207, 12, 12)
     summary(model, [64, 12, 207, 3])

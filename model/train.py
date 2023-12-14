@@ -21,7 +21,7 @@ from lib.utils import (
     CustomJSONEncoder,
 )
 from lib.metrics import RMSE_MAE_MAPE
-from lib.data_prepare import get_dataloaders_from_index_data
+from lib.data_prepare import get_dataloaders_from_index_data,get_adj_dis_matrix
 from model.STAEformer import STAEformer
 
 # ! X shape: (B, T, N, C)
@@ -234,7 +234,9 @@ if __name__ == "__main__":
     with open(f"{model_name}.yaml", "r") as f:
         cfg = yaml.safe_load(f)
     cfg = cfg[dataset]
-
+    adj_path = '../data/{}/{}.csv'.format(dataset,dataset)
+    adj,dis,edge = get_adj_dis_matrix(dataset,adj_path,cfg['num_nodes'])
+    cfg["model_args"]['edge'] = edge
     # -------------------------------- load model -------------------------------- #
 
     model = STAEformer(**cfg["model_args"])

@@ -1,3 +1,5 @@
+import csv
+
 import torch
 import numpy as np
 import os
@@ -71,3 +73,67 @@ def get_dataloaders_from_index_data(
     )
 
     return trainset_loader, valset_loader, testset_loader, scaler
+
+def get_adj_dis_matrix(dataset, adj_file, num_of_vertices, direction=False, id_filename=None):
+    '''
+    Parameters
+    ----------
+    adj_file: str, path of the csv file contains edges information
+
+    num_of_vertices: int, the number of vertices
+
+    Returns
+    ----------
+    A: np.ndarray, adjacency matrix
+
+    '''
+    max_dict = {
+        'PEMS03': 10.194,
+        'PEMS04': 2712.1,
+        'PEMS07': 20.539,
+        'PEMS08': 3274.4
+    }
+    A = np.zeros((int(num_of_vertices), int(num_of_vertices)), dtype=np.float32)
+    distaneA = np.zeros((int(num_of_vertices), int(num_of_vertices)), dtype=np.float32)
+    edges = []
+    # if node id in distance_df_file doesn't start from zero,
+    # it needs to be remap via id_filename which contains the corresponding id with sorted index.
+    if id_filename:
+        with open(id_filename, 'r') as f:
+            id_dict = {int(i): idx for idx, i in enumerate(f.read().strip().split('\n'))}  # 把节点id（idx）映射成从0开始的索引
+
+        with open(adj_file, 'r') as f:
+            f.readline()  # 略过表头那一行
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) != 3:
+                    continue
+                i, j, distance = int(row[0]), int(row[1]), float(row[2])
+                if i==j:
+                    continue
+                A[id_dict[i], id_dict[j]] = 1
+                distaneA[id_dict[i], id_dict[j]] = max_dict[dataset] / distance
+                if not direction:
+                    A[id_dict[j], id_dict[i]] = 1
+                    distaneA[id_dict[j], id_dict[i]] = max_dict[dataset] / distance
+
+        return A, distaneA  # adj matrix, distance matrix
+
+    else:  # distance_df_file: node id starts from zero
+        with open(adj_file, 'r') as f:
+            f.readline()
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) != 3:
+                    continue
+                i, j, distance = int(row[0]), int(row[1]), float(row[2])
+                edge = np.zeros(num_of_vertices)
+                edge[i],edge[j] = 1,1
+                edges.append([edge])
+                A[i, j] = 1
+                distaneA[i, j] = max_dict[dataset] / distance
+                if not direction:
+                    A[j, i] = 1
+                    distaneA[j, i] = max_dict[dataset] / distance
+        edges = np.concatenate(edges,axis=0)
+        return A, distaneA,edges
